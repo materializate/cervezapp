@@ -203,6 +203,26 @@ html,body{height:100%;width:100%;overflow:hidden;font-family:'DM Sans',sans-seri
 .pu-tag{padding:2px 8px;background:var(--panel2);border:1px solid var(--border);border-radius:20px;font-size:10px;color:var(--muted)}
 .pu-date{font-size:10px;color:var(--muted);margin-top:4px}
 
+/* modal de edición */
+.edit-overlay{
+  position:fixed;inset:0;z-index:500;background:rgba(0,0,0,.4);
+  backdrop-filter:blur(3px);display:flex;align-items:flex-end;
+  opacity:0;pointer-events:none;transition:opacity .25s;
+}
+.edit-overlay.open{opacity:1;pointer-events:auto}
+.edit-modal{
+  width:100%;background:var(--panel);
+  border-radius:var(--r) var(--r) 0 0;border-top:1px solid var(--border2);
+  padding:20px 18px 36px;
+  transform:translateY(100%);transition:transform .3s cubic-bezier(.4,0,.2,1);
+  max-height:90vh;overflow-y:auto;
+}
+.edit-overlay.open .edit-modal{transform:translateY(0)}
+@media(min-width:768px){
+  .edit-overlay{align-items:center}
+  .edit-modal{border-radius:var(--r);max-width:460px;margin:auto;width:460px}
+}
+
 /* selector de marca en popup */
 .pu-assign{margin-top:8px}
 .pu-assign-title{font-size:11px;font-weight:600;color:var(--text);margin-bottom:7px;display:flex;align-items:center;gap:5px}
@@ -626,6 +646,7 @@ function puHTML(bar) {
     ${fecha ? `<div class="pu-date">Añadido el ${fecha}</div>` : ''}
     <div class="pu-hr"></div>
     ${assignSection}
+    <button class="pu-change-btn" id="pu-edit-${bar.id}" style="margin-top:6px">✏️ Editar nombre / dirección / ubicación</button>
   </div>`;
 }
 
@@ -685,6 +706,10 @@ function bindPopupEvents(bar, popup) {
         }
       });
     }
+
+    // Botón editar
+    const editBtn = document.getElementById(`pu-edit-${bar.id}`);
+    if (editBtn) editBtn.addEventListener('click', () => openEditModal(bar));
   });
 }
 
@@ -979,6 +1004,141 @@ async function boot() {
 }
 
 boot();
+
+// ══════════════════════════════════════════════════════════
+// EDITAR BAR
+// ══════════════════════════════════════════════════════════
+async function dbUpdateFull(id, data) {
+  const r = await fetch(`${SB_URL}/rest/v1/bares?id=eq.${id}`, {
+    method: "PATCH",
+    headers: { ...SB_HEADERS, "Prefer": "return=minimal" },
+    body: JSON.stringify(data)
+  });
+  if (!r.ok) throw new Error(await r.text());
+}
+
+function openEditModal(bar) {
+  map.closePopup();
+  $('edit-id').value = bar.id;
+  $('edit-nombre').value = bar.name || '';
+  $('edit-ciudad').value = bar.city || '';
+  $('edit-direccion').value = bar.address || '';
+  $('edit-lat').value = bar.lat || '';
+  $('edit-lng').value = bar.lng || '';
+  $('edit-tags').value = (bar.tags || []).join(', ');
+  $('edit-eloc').textContent = '';
+  $('edit-save-btn').disabled = false;
+  $('edit-save-txt').textContent = 'GUARDAR CAMBIOS';
+  $('edit-geo-btn').classList.remove('loading');
+  $('edit-geo-btn').textContent = '📍 Usar mi ubicación actual';
+  $('edit-overlay').classList.add('open');
+}
+
+function closeEditModal() {
+  $('edit-overlay').classList.remove('open');
+}
+
+$('edit-close').addEventListener('click', closeEditModal);
+$('edit-overlay').addEventListener('click', e => { if (e.target === $('edit-overlay')) closeEditModal(); });
+
+$('edit-geo-btn').addEventListener('click', () => {
+  const btn = $('edit-geo-btn');
+  btn.classList.add('loading'); btn.textContent = '⏳ Obteniendo…';
+  navigator.geolocation.getCurrentPosition(
+    p => {
+      $('edit-lat').value = p.coords.latitude.toFixed(5);
+      $('edit-lng').value = p.coords.longitude.toFixed(5);
+      btn.classList.remove('loading'); btn.textContent = '✅ Ubicación obtenida';
+      $('edit-eloc').textContent = '';
+    },
+    () => {
+      btn.classList.remove('loading'); btn.textContent = '📍 Usar mi ubicación actual';
+      $('edit-eloc').textContent = 'No se pudo obtener. Introduce las coordenadas manualmente.';
+    }
+  );
+});
+
+map.on('click', e => {
+  if ($('edit-overlay').classList.contains('open')) {
+    $('edit-lat').value = e.latlng.lat.toFixed(5);
+    $('edit-lng').value = e.latlng.lng.toFixed(5);
+    toast('📍 Nueva ubicación marcada');
+  }
+});
+
+$('edit-save-btn').addEventListener('click', async () => {
+  const id = $('edit-id').value;
+  const lat = parseFloat($('edit-lat').value);
+  const lng = parseFloat($('edit-lng').value);
+  if (isNaN(lat) || isNaN(lng) || lat < 27 || lat > 44 || lng < -19 || lng > 6) {
+    $('edit-eloc').textContent = 'Ubicación inválida (debe estar en España)';
+    return;
+  }
+  const btn = $('edit-save-btn');
+  btn.disabled = true; $('edit-save-txt').textContent = 'Guardando…';
+  try {
+    const data = {
+      nombre: $('edit-nombre').value.trim(),
+      ciudad: $('edit-ciudad').value.trim(),
+      direccion: $('edit-direccion').value.trim() || null,
+      lat, lng,
+      etiquetas: $('edit-tags').value.split(',').map(t => t.trim()).filter(Boolean),
+    };
+    await dbUpdateFull(id, data);
+    const bar = dbBars.find(b => b.id === id);
+    if (bar) {
+      bar.name = data.nombre; bar.city = data.ciudad;
+      bar.address = data.direccion || ''; bar.lat = lat; bar.lng = lng; bar.tags = data.etiquetas;
+      if (mkrs[id]) {
+        mkrs[id].setLatLng([lat, lng]);
+        mkrs[id].setPopupContent(puHTML(bar));
+        bindPopupEvents(bar, mkrs[id].getPopup());
+      }
+    }
+    renderList(); closeEditModal();
+    toast('✅ Bar actualizado correctamente');
+  } catch(e) {
+    btn.disabled = false; $('edit-save-txt').textContent = 'GUARDAR CAMBIOS';
+    toast('❌ Error al guardar: ' + e.message, true);
+  }
+});
 </script>
-</body>
-</html>
+<!-- ═══ MODAL EDITAR BAR ═══ -->
+<div class="edit-overlay" id="edit-overlay">
+  <div class="edit-modal">
+    <div class="m-header">
+      <div class="m-title">✏️ Editar Bar</div>
+      <button class="m-close" id="edit-close">✕</button>
+    </div>
+    <input type="hidden" id="edit-id"/>
+    <div class="fg">
+      <label class="fl">Nombre del bar</label>
+      <input class="fi" id="edit-nombre" placeholder="Nombre del bar" autocomplete="off"/>
+    </div>
+    <div class="fg">
+      <label class="fl">Ciudad</label>
+      <input class="fi" id="edit-ciudad" placeholder="Ciudad" autocomplete="off"/>
+    </div>
+    <div class="fg">
+      <label class="fl">Dirección</label>
+      <input class="fi" id="edit-direccion" placeholder="Calle, número…" autocomplete="off"/>
+    </div>
+    <div class="fg">
+      <label class="fl">Ubicación en el mapa</label>
+      <button class="loc-btn" id="edit-geo-btn">📍 Usar mi ubicación actual</button>
+      <div class="coord-row">
+        <input class="fi" id="edit-lat" placeholder="Latitud" type="number" step="0.0001"/>
+        <input class="fi" id="edit-lng" placeholder="Longitud" type="number" step="0.0001"/>
+      </div>
+      <div class="hint">💡 También puedes cerrar este panel, tocar el mapa y volver a abrir Editar</div>
+      <div class="ferr" id="edit-eloc"></div>
+    </div>
+    <div class="fg">
+      <label class="fl">Etiquetas (separadas por coma)</label>
+      <input class="fi" id="edit-tags" placeholder="tapas, terraza, pintxos…"/>
+    </div>
+    <button class="submit" id="edit-save-btn">
+      <span id="edit-save-txt">GUARDAR CAMBIOS</span>
+    </button>
+  </div>
+</div>
