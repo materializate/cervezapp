@@ -203,6 +203,34 @@ html,body{height:100%;width:100%;overflow:hidden;font-family:'DM Sans',sans-seri
 .pu-tag{padding:2px 8px;background:var(--panel2);border:1px solid var(--border);border-radius:20px;font-size:10px;color:var(--muted)}
 .pu-date{font-size:10px;color:var(--muted);margin-top:4px}
 
+/* selector de marca en popup */
+.pu-assign{margin-top:8px}
+.pu-assign-title{font-size:11px;font-weight:600;color:var(--text);margin-bottom:7px;display:flex;align-items:center;gap:5px}
+.pu-brands{display:grid;grid-template-columns:repeat(4,1fr);gap:5px;margin-bottom:8px}
+.pu-brand-opt{
+  display:flex;flex-direction:column;align-items:center;gap:3px;
+  padding:6px 4px;border-radius:8px;border:1.5px solid var(--border);
+  cursor:pointer;transition:all .15s;background:var(--panel2);
+}
+.pu-brand-opt:hover{border-color:var(--gold);background:var(--panel)}
+.pu-brand-opt.pu-sel{border-color:var(--gold);background:rgba(196,135,10,.08)}
+.pu-brand-opt svg{border-radius:3px}
+.pu-brand-opt-name{font-size:8px;text-align:center;color:var(--muted);line-height:1.2}
+.pu-brand-opt.pu-sel .pu-brand-opt-name{color:var(--gold);font-weight:600}
+.pu-save-btn{
+  width:100%;padding:8px;background:var(--gold);border:none;border-radius:8px;
+  color:white;font-family:'Bebas Neue',sans-serif;font-size:14px;letter-spacing:1px;
+  cursor:pointer;transition:all .15s;display:flex;align-items:center;justify-content:center;gap:5px;
+}
+.pu-save-btn:hover:not(:disabled){background:#D4970A}
+.pu-save-btn:disabled{opacity:.4;cursor:not-allowed}
+.pu-change-btn{
+  width:100%;padding:6px;background:none;border:1px solid var(--border2);border-radius:8px;
+  color:var(--muted);font-family:'DM Sans',sans-serif;font-size:11px;
+  cursor:pointer;transition:all .15s;margin-top:5px;
+}
+.pu-change-btn:hover{border-color:var(--gold);color:var(--gold)}
+
 /* ── TOAST ── */
 .toast{position:fixed;bottom:90px;left:50%;transform:translateX(-50%) translateY(20px);z-index:600;background:white;border:1.5px solid var(--gold);border-radius:24px;padding:10px 20px;font-size:13px;font-weight:500;color:var(--gold);opacity:0;pointer-events:none;transition:all .3s;white-space:nowrap;box-shadow:0 4px 20px rgba(0,0,0,.12)}
 .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
@@ -397,7 +425,14 @@ async function dbInsert(bar) {
   return d[0];
 }
 
-function fromDB(row) {
+async function dbUpdate(id, marca) {
+  const r = await fetch(`${SB_URL}/rest/v1/bares?id=eq.${id}`, {
+    method: "PATCH",
+    headers: { ...SB_HEADERS, "Prefer": "return=minimal" },
+    body: JSON.stringify({ marca })
+  });
+  if (!r.ok) { const e = await r.text(); throw new Error(e); }
+}
   return {
     id: row.id,
     name: row.nombre,
@@ -560,7 +595,23 @@ function puHTML(bar) {
   const b = getBrand(bar.brand);
   const tags = (bar.tags || []).map(t => `<span class="pu-tag">${t}</span>`).join('');
   const fecha = bar.at ? new Date(bar.at).toLocaleDateString('es-ES', {day:'numeric',month:'short',year:'numeric'}) : '';
-  const sinMarca = !bar.brand ? `<div style="margin-top:6px;padding:7px 10px;background:#FFF8E1;border:1px solid #FFD54F;border-radius:8px;font-size:11px;color:#795548">🍺 <strong>¿Sabes qué cerveza sirven?</strong> ¡Añádela tú!</div>` : '';
+
+  // Selector de marcas
+  const brandOpts = Object.entries(B).map(([k, bx]) => `
+    <div class="pu-brand-opt${bar.brand===k?' pu-sel':''}" data-brand="${k}" data-barid="${bar.id}">
+      <div style="border-radius:3px;overflow:hidden;width:36px;height:23px">${bx.logo(36,23)}</div>
+      <div class="pu-brand-opt-name">${bx.name}</div>
+    </div>`).join('');
+
+  const assignSection = `
+    <div class="pu-assign" id="pu-assign-${bar.id}">
+      ${!bar.brand ? `<div class="pu-assign-title">🍺 ¿Qué cerveza sirven?</div>` : `<div class="pu-assign-title">✏️ Cambiar cerveza</div>`}
+      <div class="pu-brands">${brandOpts}</div>
+      <button class="pu-save-btn" id="pu-save-${bar.id}" disabled>GUARDAR</button>
+    </div>
+    ${bar.brand ? `<button class="pu-change-btn" id="pu-toggle-${bar.id}">✏️ Cambiar cerveza</button>` : ''}
+  `;
+
   return `<div class="pu">
     <div class="pu-brand">
       <div class="pu-logo-wrap" style="background:${b.bg};border:1px solid ${b.c}40">${b.logo(64,40)}</div>
@@ -570,9 +621,69 @@ function puHTML(bar) {
     <div class="pu-name">🍻 ${bar.name}</div>
     <div class="pu-addr">${bar.address ? bar.address+', ' : ''}${bar.city}</div>
     ${tags ? `<div class="pu-tags">${tags}</div>` : ''}
-    ${sinMarca}
     ${fecha ? `<div class="pu-date">Añadido el ${fecha}</div>` : ''}
+    <div class="pu-hr"></div>
+    ${assignSection}
   </div>`;
+}
+
+function bindPopupEvents(bar, popup) {
+  // Espera a que el popup esté en el DOM
+  popup.on('add', () => {
+    let pendingBrand = bar.brand || null;
+
+    // Botón "Cambiar cerveza" (solo bares con marca ya asignada)
+    const toggleBtn = document.getElementById(`pu-toggle-${bar.id}`);
+    const assignDiv = document.getElementById(`pu-assign-${bar.id}`);
+    if (toggleBtn && assignDiv) {
+      assignDiv.style.display = 'none';
+      toggleBtn.addEventListener('click', () => {
+        assignDiv.style.display = 'block';
+        toggleBtn.style.display = 'none';
+      });
+    }
+
+    // Opciones de marca
+    document.querySelectorAll(`.pu-brand-opt[data-barid="${bar.id}"]`).forEach(opt => {
+      opt.addEventListener('click', () => {
+        pendingBrand = opt.dataset.brand;
+        document.querySelectorAll(`.pu-brand-opt[data-barid="${bar.id}"]`).forEach(o => o.classList.remove('pu-sel'));
+        opt.classList.add('pu-sel');
+        const saveBtn = document.getElementById(`pu-save-${bar.id}`);
+        if (saveBtn) saveBtn.disabled = (pendingBrand === bar.brand);
+      });
+    });
+
+    // Botón guardar
+    const saveBtn = document.getElementById(`pu-save-${bar.id}`);
+    if (saveBtn) {
+      saveBtn.addEventListener('click', async () => {
+        if (!pendingBrand) return;
+        saveBtn.disabled = true;
+        saveBtn.textContent = 'Guardando…';
+        try {
+          await dbUpdate(bar.id, pendingBrand);
+          // Actualiza en memoria
+          bar.brand = pendingBrand;
+          // Refresca marcador y lista
+          if (mkrs[bar.id]) {
+            mkrs[bar.id].setIcon(mkIcon(pendingBrand));
+            mkrs[bar.id].setPopupContent(puHTML(bar));
+            bindPopupEvents(bar, mkrs[bar.id].getPopup());
+          }
+          renderList();
+          renderPills();
+          updateStats();
+          toast(`✅ Cerveza actualizada — ¡gracias por colaborar!`);
+          map.closePopup();
+        } catch(e) {
+          saveBtn.disabled = false;
+          saveBtn.textContent = 'GUARDAR';
+          toast('❌ Error al guardar. Inténtalo de nuevo.', true);
+        }
+      });
+    }
+  });
 }
 
 function renderMkrs() {
@@ -580,7 +691,9 @@ function renderMkrs() {
   mkrs = {};
   filtered().forEach(bar => {
     const m = L.marker([bar.lat, bar.lng], { icon: mkIcon(bar.brand) }).addTo(map);
-    m.bindPopup(puHTML(bar), { maxWidth: 260, minWidth: 240 });
+    const popup = L.popup({ maxWidth: 280, minWidth: 260 }).setContent(puHTML(bar));
+    m.bindPopup(popup);
+    bindPopupEvents(bar, popup);
     m.on('click', () => { selId = bar.id; renderList(); });
     mkrs[bar.id] = m;
   });
