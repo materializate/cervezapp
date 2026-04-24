@@ -416,6 +416,46 @@ html,body{height:100%;width:100%;overflow:hidden;font-family:'DM Sans',sans-seri
   </div>
 </div>
 
+<!-- ═══ MODAL EDITAR BAR ═══ -->
+<div class="edit-overlay" id="edit-overlay">
+  <div class="edit-modal">
+    <div class="m-header">
+      <div class="m-title">✏️ Editar Bar</div>
+      <button class="m-close" id="edit-close">✕</button>
+    </div>
+    <input type="hidden" id="edit-id"/>
+    <div class="fg">
+      <label class="fl">Nombre del bar</label>
+      <input class="fi" id="edit-nombre" placeholder="Nombre del bar" autocomplete="off"/>
+    </div>
+    <div class="fg">
+      <label class="fl">Ciudad</label>
+      <input class="fi" id="edit-ciudad" placeholder="Ciudad" autocomplete="off"/>
+    </div>
+    <div class="fg">
+      <label class="fl">Dirección</label>
+      <input class="fi" id="edit-direccion" placeholder="Calle, número…" autocomplete="off"/>
+    </div>
+    <div class="fg">
+      <label class="fl">Ubicación en el mapa</label>
+      <button class="loc-btn" id="edit-geo-btn">📍 Usar mi ubicación actual</button>
+      <div class="coord-row">
+        <input class="fi" id="edit-lat" placeholder="Latitud" type="number" step="0.0001"/>
+        <input class="fi" id="edit-lng" placeholder="Longitud" type="number" step="0.0001"/>
+      </div>
+      <div class="hint">💡 También puedes cerrar este panel, tocar el mapa y volver a abrir Editar</div>
+      <div class="ferr" id="edit-eloc"></div>
+    </div>
+    <div class="fg">
+      <label class="fl">Etiquetas (separadas por coma)</label>
+      <input class="fi" id="edit-tags" placeholder="tapas, terraza, pintxos…"/>
+    </div>
+    <button class="submit" id="edit-save-btn">
+      <span id="edit-save-txt">GUARDAR CAMBIOS</span>
+    </button>
+  </div>
+</div>
+
 <script>
 // ══════════════════════════════════════════════════════════
 // SUPABASE CONFIG
@@ -1008,10 +1048,6 @@ async function boot() {
 }
 
 boot();
-
-// ══════════════════════════════════════════════════════════
-// EDITAR BAR
-// ══════════════════════════════════════════════════════════
 async function dbUpdateFull(id, data) {
   const r = await fetch(`${SB_URL}/rest/v1/bares?id=eq.${id}`, {
     method: "PATCH",
@@ -1107,42 +1143,5 @@ $('edit-save-btn').addEventListener('click', async () => {
   }
 });
 </script>
-<!-- ═══ MODAL EDITAR BAR ═══ -->
-<div class="edit-overlay" id="edit-overlay">
-  <div class="edit-modal">
-    <div class="m-header">
-      <div class="m-title">✏️ Editar Bar</div>
-      <button class="m-close" id="edit-close">✕</button>
-    </div>
-    <input type="hidden" id="edit-id"/>
-    <div class="fg">
-      <label class="fl">Nombre del bar</label>
-      <input class="fi" id="edit-nombre" placeholder="Nombre del bar" autocomplete="off"/>
-    </div>
-    <div class="fg">
-      <label class="fl">Ciudad</label>
-      <input class="fi" id="edit-ciudad" placeholder="Ciudad" autocomplete="off"/>
-    </div>
-    <div class="fg">
-      <label class="fl">Dirección</label>
-      <input class="fi" id="edit-direccion" placeholder="Calle, número…" autocomplete="off"/>
-    </div>
-    <div class="fg">
-      <label class="fl">Ubicación en el mapa</label>
-      <button class="loc-btn" id="edit-geo-btn">📍 Usar mi ubicación actual</button>
-      <div class="coord-row">
-        <input class="fi" id="edit-lat" placeholder="Latitud" type="number" step="0.0001"/>
-        <input class="fi" id="edit-lng" placeholder="Longitud" type="number" step="0.0001"/>
-      </div>
-      <div class="hint">💡 También puedes cerrar este panel, tocar el mapa y volver a abrir Editar</div>
-      <div class="ferr" id="edit-eloc"></div>
-    </div>
-    <div class="fg">
-      <label class="fl">Etiquetas (separadas por coma)</label>
-      <input class="fi" id="edit-tags" placeholder="tapas, terraza, pintxos…"/>
-    </div>
-    <button class="submit" id="edit-save-btn">
-      <span id="edit-save-txt">GUARDAR CAMBIOS</span>
-    </button>
-  </div>
-</div>
+</body>
+</html>
