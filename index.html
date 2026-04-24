@@ -493,15 +493,16 @@ const SAMPLE_BARS = [
 // STATE
 // ══════════════════════════════════════════════════════════
 let dbBars = [];
-let filters = new Set(Object.keys(B));
+let filters = new Set([...Object.keys(B), '__unknown__']);
 let sq = "", selId = null, mkrs = {}, map, pendLL = null, selBrand = null, shState = "mid";
 
 function allBars() { return dbBars; }
 function filtered() {
-  return allBars().filter(b =>
-    filters.has(b.brand) &&
-    (!sq || b.name.toLowerCase().includes(sq.toLowerCase()) || b.city.toLowerCase().includes(sq.toLowerCase()))
-  );
+  return allBars().filter(b => {
+    const brandOk = b.brand ? filters.has(b.brand) : filters.has('__unknown__');
+    const searchOk = !sq || b.name.toLowerCase().includes(sq.toLowerCase()) || b.city.toLowerCase().includes(sq.toLowerCase());
+    return brandOk && searchOk;
+  });
 }
 function $(i) { return document.getElementById(i); }
 let _tt;
@@ -532,29 +533,44 @@ function initMap() {
   });
 }
 
+// Logo genérico para bares sin marca asignada
+const UNKNOWN_LOGO = (w,h) => `<svg width="${w}" height="${h}" viewBox="0 0 56 36" xmlns="http://www.w3.org/2000/svg">
+  <rect width="56" height="36" rx="5" fill="#5A4A3A"/>
+  <rect x="2" y="2" width="52" height="32" rx="4" fill="#6B5A48"/>
+  <text x="28" y="14" font-family="Arial,sans-serif" font-size="14" fill="#D4B896" text-anchor="middle" dominant-baseline="middle">🍺</text>
+  <text x="28" y="28" font-family="Arial,sans-serif" font-size="6" fill="#D4B896" text-anchor="middle" dominant-baseline="middle" letter-spacing="0.5">SIN ASIGNAR</text>
+</svg>`;
+
+const UNKNOWN_BRAND = { name:"Sin asignar", c:"#8A7060", bg:"#3A2A1A", o:"—", logo:UNKNOWN_LOGO };
+
+function getBrand(bk) { return (bk && B[bk]) ? B[bk] : UNKNOWN_BRAND; }
+
 function mkIcon(bk) {
-  const b = B[bk] || B.mahou;
+  const b = getBrand(bk);
   const W = 46, H = 30;
   const svg = b.logo(W, H);
+  const opacity = bk ? '1' : '0.65';
   return L.divIcon({
-    html: `<div style="width:${W}px;height:${H}px;border-radius:5px;overflow:hidden;box-shadow:0 3px 10px rgba(0,0,0,.35),0 0 0 1.5px ${b.c}88;cursor:pointer">${svg}</div>`,
+    html: `<div style="width:${W}px;height:${H}px;border-radius:5px;overflow:hidden;box-shadow:0 3px 10px rgba(0,0,0,.35),0 0 0 1.5px ${b.c}88;cursor:pointer;opacity:${opacity}">${svg}</div>`,
     className: '', iconSize: [W, H], iconAnchor: [W/2, H/2], popupAnchor: [0, -(H/2+6)]
   });
 }
 
 function puHTML(bar) {
-  const b = B[bar.brand] || B.mahou;
+  const b = getBrand(bar.brand);
   const tags = (bar.tags || []).map(t => `<span class="pu-tag">${t}</span>`).join('');
   const fecha = bar.at ? new Date(bar.at).toLocaleDateString('es-ES', {day:'numeric',month:'short',year:'numeric'}) : '';
+  const sinMarca = !bar.brand ? `<div style="margin-top:6px;padding:7px 10px;background:#FFF8E1;border:1px solid #FFD54F;border-radius:8px;font-size:11px;color:#795548">🍺 <strong>¿Sabes qué cerveza sirven?</strong> ¡Añádela tú!</div>` : '';
   return `<div class="pu">
     <div class="pu-brand">
       <div class="pu-logo-wrap" style="background:${b.bg};border:1px solid ${b.c}40">${b.logo(64,40)}</div>
-      <div><div class="pu-bname" style="color:${b.c}">${b.name}</div><div class="pu-orig">🏭 ${b.o}</div></div>
+      <div><div class="pu-bname" style="color:${b.c}">${b.name}</div><div class="pu-orig">${bar.brand ? '🏭 '+b.o : '📍 '+bar.city}</div></div>
     </div>
     <div class="pu-hr"></div>
     <div class="pu-name">🍻 ${bar.name}</div>
     <div class="pu-addr">${bar.address ? bar.address+', ' : ''}${bar.city}</div>
     ${tags ? `<div class="pu-tags">${tags}</div>` : ''}
+    ${sinMarca}
     ${fecha ? `<div class="pu-date">Añadido el ${fecha}</div>` : ''}
   </div>`;
 }
@@ -580,11 +596,11 @@ function renderList() {
   $('ds-cnt').textContent = f.length;
 
   const makeCard = bar => {
-    const b = B[bar.brand] || B.mahou;
+    const b = getBrand(bar.brand);
     const d = document.createElement('div');
     d.className = `bcard${selId === bar.id ? ' sel' : ''}`;
     d.innerHTML = `
-      <div class="bcard-ico" style="background:${b.bg};border:1px solid ${b.c}50">${b.logo(44,28)}</div>
+      <div class="bcard-ico" style="background:${b.bg};border:1px solid ${b.c}50;opacity:${bar.brand?1:0.6}">${b.logo(44,28)}</div>
       <div class="bcard-info">
         <div class="bcard-name">${bar.name}</div>
         <div class="bcard-meta">
@@ -617,6 +633,23 @@ function renderPills() {
   ['pills-mob', 'pills-ds'].forEach(id => {
     const el = $(id); if (!el) return;
     el.innerHTML = '';
+
+    // Pill especial: sin asignar
+    const sinAsignar = dbBars.filter(b => !b.brand).length;
+    if (sinAsignar > 0) {
+      const on = filters.has('__unknown__');
+      const p = document.createElement('div');
+      p.className = `pill${on ? ' on' : ''}`;
+      p.style.borderColor = on ? '#8A706090' : '';
+      p.style.color = on ? '#5A4A3A' : '';
+      p.innerHTML = `<div class="pill-logo" style="background:#3A2A1A;border-radius:3px">${UNKNOWN_LOGO(22,14)}</div>Sin marca (${sinAsignar})`;
+      p.addEventListener('click', () => {
+        filters.has('__unknown__') ? filters.delete('__unknown__') : filters.add('__unknown__');
+        renderPills(); renderMkrs(); renderList();
+      });
+      el.appendChild(p);
+    }
+
     Object.entries(B).forEach(([k, b]) => {
       const on = filters.has(k);
       const p = document.createElement('div');
