@@ -433,6 +433,8 @@ async function dbUpdate(id, marca) {
   });
   if (!r.ok) { const e = await r.text(); throw new Error(e); }
 }
+
+function fromDB(row) {
   return {
     id: row.id,
     name: row.nombre,
@@ -911,42 +913,68 @@ $('add-ds').addEventListener('click', openModal);
 async function boot() {
   initMap();
   renderBSel();
-  renderPills();
   setSheet('mid');
 
-  try {
-    const rows = await dbGetAll();
+  const ls = $('loading');
+  const lsub = ls.querySelector('.loading-sub');
+  const lerr = $('loading-err');
 
-    // Si la tabla está vacía, cargamos los datos de ejemplo
-    if (rows.length === 0) {
-      $('loading').querySelector('.loading-sub').textContent = 'Cargando datos iniciales…';
-      // Insertamos en lotes de 10 para no saturar
-      for (let i = 0; i < SAMPLE_BARS.length; i += 10) {
-        const batch = SAMPLE_BARS.slice(i, i + 10);
-        await Promise.all(batch.map(bar => dbInsert(bar)));
-      }
-      const fresh = await dbGetAll();
-      dbBars = fresh.map(fromDB);
-    } else {
-      dbBars = rows.map(fromDB);
+  try {
+    lsub.textContent = 'Conectando con la base de datos…';
+
+    // Carga paginada — 500 bares por petición para no saturar
+    let allRows = [];
+    let page = 0;
+    const PAGE = 500;
+    while (true) {
+      lsub.textContent = `Cargando bares… (${allRows.length})`;
+      const from = page * PAGE;
+      const to = from + PAGE - 1;
+      const r = await fetch(
+        `${SB_URL}/rest/v1/bares?select=*&order=creado_en.asc&offset=${from}&limit=${PAGE}`,
+        { headers: SB_HEADERS }
+      );
+      if (!r.ok) throw new Error(`Error HTTP ${r.status}: ${await r.text()}`);
+      const batch = await r.json();
+      allRows = allRows.concat(batch);
+      if (batch.length < PAGE) break; // última página
+      page++;
     }
 
+    // Si vacía, cargar datos de ejemplo
+    if (allRows.length === 0) {
+      lsub.textContent = 'Cargando datos iniciales…';
+      for (let i = 0; i < SAMPLE_BARS.length; i += 10) {
+        await Promise.all(SAMPLE_BARS.slice(i, i + 10).map(bar => dbInsert(bar)));
+      }
+      const r2 = await fetch(`${SB_URL}/rest/v1/bares?select=*&order=creado_en.asc&limit=500`, { headers: SB_HEADERS });
+      allRows = await r2.json();
+    }
+
+    dbBars = allRows.map(fromDB);
+
+    // Renderizar en dos pasos: primero pills (rápido), luego markers
+    renderPills();
+    lsub.textContent = `Pintando ${dbBars.length} bares en el mapa…`;
+    await new Promise(r => setTimeout(r, 50)); // cede el hilo al navegador
     renderMkrs();
     renderList();
 
     // Ocultar pantalla de carga
-    const ls = $('loading');
     ls.classList.add('hidden');
     setTimeout(() => ls.style.display = 'none', 500);
 
   } catch (err) {
     console.error(err);
-    const ls = $('loading');
     ls.querySelector('.loading-spinner').style.display = 'none';
-    ls.querySelector('.loading-sub').style.display = 'none';
-    const errEl = $('loading-err');
-    errEl.style.display = 'block';
-    errEl.innerHTML = `⚠️ No se pudo conectar con la base de datos.<br><br>Comprueba que la tabla <strong>bares</strong> existe en Supabase y que las políticas RLS están activas.<br><br><small>${err.message}</small>`;
+    lsub.style.display = 'none';
+    lerr.style.display = 'block';
+    lerr.innerHTML = `⚠️ <strong>Error al cargar</strong><br><br>${err.message}<br><br>
+      Posibles causas:<br>
+      • La tabla <strong>bares</strong> no existe en Supabase → ejecútala desde SQL Editor<br>
+      • Las políticas RLS no están activas<br>
+      • Sin conexión a internet<br><br>
+      <small style="color:#aaa">Recarga la página para intentarlo de nuevo</small>`;
   }
 }
 
