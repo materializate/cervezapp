@@ -203,26 +203,19 @@ html,body{height:100%;width:100%;overflow:hidden;font-family:'DM Sans',sans-seri
 .pu-tag{padding:2px 8px;background:var(--panel2);border:1px solid var(--border);border-radius:20px;font-size:10px;color:var(--muted)}
 .pu-date{font-size:10px;color:var(--muted);margin-top:4px}
 
-/* Fuerza Leaflet por debajo del modal de edición cuando está abierto */
-.edit-overlay.open ~ * .leaflet-container,
-.leaflet-pane,
-.leaflet-top,
-.leaflet-bottom { z-index: auto; }
-
 /* modal de edición */
 .edit-overlay{
   position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.5);
-  backdrop-filter:blur(3px);display:flex;align-items:flex-end;
-  opacity:0;pointer-events:none;transition:opacity .25s;
+  backdrop-filter:blur(3px);display:none;align-items:flex-end;
+  opacity:0;transition:opacity .25s;
 }
-.edit-overlay.open{opacity:1;pointer-events:auto}
+.edit-overlay.open{display:flex;opacity:1}
 .edit-modal{
   width:100%;background:var(--panel);
   border-radius:var(--r) var(--r) 0 0;border-top:1px solid var(--border2);
   padding:20px 18px 36px;
   transform:translateY(100%);transition:transform .3s cubic-bezier(.4,0,.2,1);
   max-height:90vh;overflow-y:auto;
-  position:relative;z-index:10000;
 }
 .edit-overlay.open .edit-modal{transform:translateY(0)}
 @media(min-width:768px){
@@ -1030,29 +1023,23 @@ async function dbUpdateFull(id, data) {
 
 function openEditModal(bar) {
   map.closePopup();
-  setTimeout(() => {
-    $('edit-id').value = bar.id;
-    $('edit-nombre').value = bar.name || '';
-    $('edit-ciudad').value = bar.city || '';
-    $('edit-direccion').value = bar.address || '';
-    $('edit-lat').value = bar.lat || '';
-    $('edit-lng').value = bar.lng || '';
-    $('edit-tags').value = (bar.tags || []).join(', ');
-    $('edit-eloc').textContent = '';
-    $('edit-save-btn').disabled = false;
-    $('edit-save-txt').textContent = 'GUARDAR CAMBIOS';
-    $('edit-geo-btn').classList.remove('loading');
-    $('edit-geo-btn').textContent = '📍 Usar mi ubicación actual';
-    // Desactiva el mapa para que no capture clicks
-    map.getContainer().style.pointerEvents = 'none';
-    $('edit-overlay').classList.add('open');
-  }, 150);
+  $('edit-id').value = bar.id;
+  $('edit-nombre').value = bar.name || '';
+  $('edit-ciudad').value = bar.city || '';
+  $('edit-direccion').value = bar.address || '';
+  $('edit-lat').value = bar.lat || '';
+  $('edit-lng').value = bar.lng || '';
+  $('edit-tags').value = (bar.tags || []).join(', ');
+  $('edit-eloc').textContent = '';
+  $('edit-save-btn').disabled = false;
+  $('edit-save-txt').textContent = 'GUARDAR CAMBIOS';
+  $('edit-geo-btn').classList.remove('loading');
+  $('edit-geo-btn').textContent = '📍 Usar mi ubicación actual';
+  $('edit-overlay').classList.add('open');
 }
 
 function closeEditModal() {
   $('edit-overlay').classList.remove('open');
-  // Reactiva el mapa
-  map.getContainer().style.pointerEvents = 'auto';
 }
 
 $('edit-close').addEventListener('click', closeEditModal);
