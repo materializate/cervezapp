@@ -1,0 +1,809 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>CervezApp</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+:root{
+  --gold:#C4870A;--dark:#1A1208;
+  --panel:#FFFDF8;--panel2:#F5EFE3;--panel3:#EDE4D0;
+  --border:rgba(180,140,60,0.2);--border2:rgba(180,140,60,0.38);
+  --text:#1A1208;--muted:#7A6A50;--r:14px;
+}
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;width:100%;overflow:hidden;font-family:'DM Sans',sans-serif;background:var(--panel);color:var(--text)}
+
+#map{position:fixed;inset:0;z-index:0}
+
+/* ── TOPBAR ── */
+.topbar{
+  position:fixed;top:0;left:0;right:0;z-index:100;
+  display:flex;align-items:center;justify-content:space-between;
+  padding:10px 14px;
+  background:linear-gradient(to bottom,rgba(255,253,248,.98) 65%,transparent);
+  pointer-events:none;
+}
+.topbar>*{pointer-events:auto}
+.logo{display:flex;align-items:center;gap:8px}
+.logo-icon{font-size:24px;filter:drop-shadow(0 1px 3px rgba(180,120,0,.4))}
+.logo-text{font-family:'Bebas Neue',sans-serif;font-size:24px;letter-spacing:2px;color:var(--gold);line-height:1}
+.logo-sub{font-size:9px;color:var(--muted);letter-spacing:2px;text-transform:uppercase}
+.topbar-btns{display:flex;gap:8px}
+.icon-btn{
+  height:36px;border-radius:20px;
+  background:rgba(255,253,248,.97);
+  border:1px solid var(--border2);color:var(--text);font-size:13px;font-weight:600;
+  display:flex;align-items:center;justify-content:center;gap:5px;
+  cursor:pointer;transition:all .15s;padding:0 14px;
+  font-family:'DM Sans',sans-serif;white-space:nowrap;
+  box-shadow:0 2px 8px rgba(0,0,0,.08);
+}
+.icon-btn:hover{background:var(--gold);color:white;border-color:var(--gold)}
+.icon-btn.round{width:36px;height:36px;border-radius:50%;padding:0}
+
+/* ── SEARCH ── */
+.searchbar{position:fixed;top:58px;left:12px;right:12px;z-index:100}
+.search-wrap{position:relative}
+.search-input{
+  width:100%;background:rgba(255,253,248,.98);
+  border:1px solid var(--border2);border-radius:12px;
+  padding:10px 14px 10px 36px;
+  color:var(--text);font-family:'DM Sans',sans-serif;font-size:14px;outline:none;
+  transition:border-color .2s;box-shadow:0 2px 8px rgba(0,0,0,.07);
+}
+.search-input:focus{border-color:var(--gold)}
+.search-input::placeholder{color:var(--muted)}
+.search-icon{position:absolute;left:11px;top:50%;transform:translateY(-50%);font-size:14px;pointer-events:none;color:var(--muted)}
+
+/* ── FILTER PILLS ── */
+.filter-row{
+  position:fixed;top:108px;left:0;right:0;z-index:100;
+  display:flex;gap:6px;padding:0 12px;
+  overflow-x:auto;scrollbar-width:none;-ms-overflow-style:none;
+}
+.filter-row::-webkit-scrollbar{display:none}
+.pill{
+  display:flex;align-items:center;gap:5px;padding:5px 10px 5px 5px;border-radius:20px;
+  background:rgba(255,253,248,.97);border:1.5px solid var(--border);
+  color:var(--muted);font-size:11px;font-weight:500;cursor:pointer;white-space:nowrap;
+  transition:all .15s;flex-shrink:0;box-shadow:0 1px 4px rgba(0,0,0,.06);
+}
+.pill.on{color:var(--text);border-color:var(--border2);background:white}
+.pill-logo{width:22px;height:16px;border-radius:3px;overflow:hidden;flex-shrink:0;display:flex;align-items:center;justify-content:center}
+.pill-logo svg{width:100%;height:100%}
+
+/* ── STATS ── */
+.stats-chip{
+  position:fixed;bottom:220px;right:12px;z-index:100;
+  background:rgba(255,253,248,.97);
+  border:1px solid var(--border2);border-radius:12px;
+  padding:8px 12px;display:flex;gap:12px;
+  transition:bottom .35s cubic-bezier(.4,0,.2,1);
+  box-shadow:0 2px 12px rgba(0,0,0,.1);
+}
+.sv{font-family:'Bebas Neue',sans-serif;font-size:18px;color:var(--gold);line-height:1;text-align:center}
+.sl{font-size:9px;color:var(--muted);letter-spacing:1.5px;text-transform:uppercase;text-align:center}
+
+/* ── LOADING OVERLAY ── */
+.loading-screen{
+  position:fixed;inset:0;z-index:500;
+  background:rgba(255,253,248,.95);backdrop-filter:blur(4px);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;
+  transition:opacity .4s;
+}
+.loading-screen.hidden{opacity:0;pointer-events:none}
+.loading-logo{font-family:'Bebas Neue',sans-serif;font-size:42px;letter-spacing:3px;color:var(--gold)}
+.loading-sub{font-size:13px;color:var(--muted);letter-spacing:1px}
+.loading-spinner{width:36px;height:36px;border:3px solid var(--border2);border-top-color:var(--gold);border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.loading-err{color:#e63946;font-size:13px;text-align:center;max-width:280px;line-height:1.5}
+
+/* ── BOTTOM SHEET ── */
+.sheet{
+  position:fixed;bottom:0;left:0;right:0;z-index:200;
+  background:var(--panel);border-radius:var(--r) var(--r) 0 0;
+  border-top:1px solid var(--border2);
+  box-shadow:0 -4px 24px rgba(0,0,0,.1);
+  transition:transform .35s cubic-bezier(.4,0,.2,1);
+  display:flex;flex-direction:column;max-height:85vh;
+  transform:translateY(calc(100% - 64px))
+}
+.sheet.mid{transform:translateY(calc(100% - 280px))}
+.sheet.full{transform:translateY(0)}
+.sh-handle{display:flex;flex-direction:column;align-items:center;padding:10px 16px 0;cursor:grab;flex-shrink:0;user-select:none}
+.sh-bar{width:36px;height:4px;background:var(--border2);border-radius:2px;margin-bottom:10px}
+.sh-title-row{width:100%;display:flex;align-items:center;justify-content:space-between;padding-bottom:10px}
+.sh-title{font-family:'Bebas Neue',sans-serif;font-size:20px;letter-spacing:1px;color:var(--gold)}
+.sh-count{font-size:12px;color:var(--muted)}
+.sh-body{overflow-y:auto;flex:1;padding:0 8px 24px;scrollbar-width:thin;scrollbar-color:var(--border2) transparent}
+.sh-body::-webkit-scrollbar{width:3px}
+.sh-body::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
+
+/* ── BAR CARDS ── */
+.bcard{
+  display:flex;align-items:center;gap:11px;padding:10px 8px;
+  border-radius:10px;cursor:pointer;transition:background .12s;
+  border:1px solid transparent;margin-bottom:2px;
+}
+.bcard:hover,.bcard:active{background:var(--panel2)}
+.bcard.sel{background:var(--panel2);border-color:var(--border2)}
+.bcard-ico{width:44px;height:28px;border-radius:6px;overflow:hidden;flex-shrink:0;display:flex;align-items:center;justify-content:center}
+.bcard-ico svg{width:100%;height:100%}
+.bcard-info{flex:1;min-width:0}
+.bcard-name{font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bcard-meta{display:flex;align-items:center;gap:5px;margin-top:2px;flex-wrap:wrap}
+.bcard-brand{font-size:10px;font-weight:600;padding:1px 6px;border-radius:20px}
+.bcard-city{font-size:11px;color:var(--muted)}
+.bcard-user{font-size:10px;color:var(--gold);font-style:italic;margin-top:1px}
+.no-res{text-align:center;padding:32px 16px;color:var(--muted);font-size:13px}
+.no-res-ic{font-size:36px;margin-bottom:8px}
+
+/* ── MODAL ── */
+.overlay{
+  position:fixed;inset:0;z-index:400;background:rgba(0,0,0,.4);
+  backdrop-filter:blur(3px);display:flex;align-items:flex-end;
+  opacity:0;pointer-events:none;transition:opacity .25s;
+}
+.overlay.open{opacity:1;pointer-events:auto}
+.modal{
+  width:100%;background:var(--panel);
+  border-radius:var(--r) var(--r) 0 0;border-top:1px solid var(--border2);
+  padding:20px 18px 36px;
+  transform:translateY(100%);transition:transform .3s cubic-bezier(.4,0,.2,1);
+  max-height:92vh;overflow-y:auto;
+}
+.overlay.open .modal{transform:translateY(0)}
+.m-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px}
+.m-title{font-family:'Bebas Neue',sans-serif;font-size:24px;letter-spacing:1.5px;color:var(--gold)}
+.m-close{width:32px;height:32px;border-radius:50%;background:var(--panel2);border:1px solid var(--border);color:var(--muted);font-size:16px;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .15s}
+.m-close:hover{background:var(--panel3);color:var(--text)}
+.fg{margin-bottom:14px}
+.fl{font-size:11px;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-bottom:6px;display:block}
+.fi{width:100%;background:var(--panel2);border:1px solid var(--border2);border-radius:10px;padding:11px 14px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:14px;outline:none;transition:border-color .2s}
+.fi:focus{border-color:var(--gold)}
+.fi::placeholder{color:var(--muted)}
+.brand-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.bopt{display:flex;flex-direction:column;align-items:center;gap:5px;padding:10px 6px 8px;border-radius:10px;border:1.5px solid var(--border);cursor:pointer;transition:all .15s;background:var(--panel2)}
+.bopt.sel{border-color:var(--gold);background:rgba(196,135,10,.06)}
+.bopt-label{width:56px;height:36px;border-radius:5px;overflow:hidden;display:flex;align-items:center;justify-content:center}
+.bopt-label svg{width:100%;height:100%}
+.bopt-nm{font-size:9px;text-align:center;color:var(--muted);line-height:1.2;max-width:70px}
+.bopt.sel .bopt-nm{color:var(--gold);font-weight:600}
+.loc-btn{width:100%;padding:11px;background:var(--panel2);border:1px dashed var(--border2);border-radius:10px;color:var(--muted);font-family:'DM Sans',sans-serif;font-size:13px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;transition:all .15s}
+.loc-btn:hover{border-color:var(--gold);color:var(--gold)}
+.loc-btn.loading{color:var(--gold);border-color:var(--gold);animation:pulse 1s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
+.coord-row{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}
+.hint{font-size:11px;color:var(--muted);margin-top:5px;line-height:1.4}
+.ferr{font-size:11px;color:#e63946;margin-top:4px;min-height:16px}
+.submit{width:100%;padding:14px;background:var(--gold);border:none;border-radius:12px;color:white;font-family:'Bebas Neue',sans-serif;font-size:18px;letter-spacing:1.5px;cursor:pointer;transition:all .15s;margin-top:8px;display:flex;align-items:center;justify-content:center;gap:8px}
+.submit:hover:not(:disabled){background:#D4970A;transform:translateY(-1px)}
+.submit:disabled{opacity:.5;cursor:not-allowed}
+
+/* ── POPUP ── */
+.leaflet-popup-content-wrapper{background:var(--panel)!important;border:1px solid var(--border2)!important;border-radius:14px!important;box-shadow:0 8px 30px rgba(0,0,0,.15)!important;padding:0!important}
+.leaflet-popup-content{margin:0!important;width:240px!important}
+.leaflet-popup-tip{background:var(--panel)!important}
+.leaflet-popup-close-button{color:var(--muted)!important;top:8px!important;right:10px!important;font-size:18px!important;z-index:10}
+.leaflet-popup-close-button:hover{color:var(--gold)!important}
+.pu{padding:14px}
+.pu-brand{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+.pu-logo-wrap{width:64px;height:40px;border-radius:7px;overflow:hidden;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.pu-logo-wrap svg{width:100%;height:100%}
+.pu-bname{font-family:'Bebas Neue',sans-serif;font-size:17px;letter-spacing:1px;line-height:1}
+.pu-orig{font-size:11px;color:var(--muted);margin-top:2px}
+.pu-hr{height:1px;background:var(--border);margin:8px 0}
+.pu-name{font-weight:600;font-size:14px;margin-bottom:3px}
+.pu-addr{font-size:12px;color:var(--muted);margin-bottom:6px}
+.pu-tags{display:flex;flex-wrap:wrap;gap:3px;margin-bottom:4px}
+.pu-tag{padding:2px 8px;background:var(--panel2);border:1px solid var(--border);border-radius:20px;font-size:10px;color:var(--muted)}
+.pu-date{font-size:10px;color:var(--muted);margin-top:4px}
+
+/* ── TOAST ── */
+.toast{position:fixed;bottom:90px;left:50%;transform:translateX(-50%) translateY(20px);z-index:600;background:white;border:1.5px solid var(--gold);border-radius:24px;padding:10px 20px;font-size:13px;font-weight:500;color:var(--gold);opacity:0;pointer-events:none;transition:all .3s;white-space:nowrap;box-shadow:0 4px 20px rgba(0,0,0,.12)}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+.toast.err{border-color:#e63946;color:#e63946}
+
+/* ── DESKTOP ── */
+@media(min-width:768px){
+  .sheet{display:none!important}
+  .searchbar,.filter-row,.topbar,.stats-chip{display:none!important}
+  #map{left:300px}
+  .desktop-sidebar{
+    display:flex!important;flex-direction:column;
+    position:fixed;top:0;left:0;bottom:0;width:300px;z-index:150;
+    background:var(--panel);border-right:1px solid var(--border2);overflow:hidden;
+    box-shadow:2px 0 16px rgba(0,0,0,.07);
+  }
+  .ds-top{display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid var(--border);flex-shrink:0}
+  .ds-logo{display:flex;flex-direction:column}
+  .ds-logo-text{font-family:'Bebas Neue',sans-serif;font-size:26px;letter-spacing:2px;color:var(--gold);line-height:1}
+  .ds-logo-sub{font-size:9px;color:var(--muted);letter-spacing:2px;text-transform:uppercase}
+  .ds-search{padding:10px 12px 0;flex-shrink:0}
+  .ds-filters{padding:8px 10px 0;display:flex;flex-wrap:wrap;gap:5px;flex-shrink:0;border-bottom:1px solid var(--border);padding-bottom:10px}
+  .ds-filters .pill{font-size:10px;padding:3px 8px 3px 4px}
+  .ds-list-hdr{padding:10px 16px 4px;font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+  .ds-list-hdr span:last-child{font-family:'Bebas Neue',sans-serif;font-size:16px;color:var(--gold)}
+  .ds-list{flex:1;overflow-y:auto;padding:4px 8px 16px;scrollbar-width:thin;scrollbar-color:var(--border2) transparent}
+  .ds-list::-webkit-scrollbar{width:3px}
+  .ds-list::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
+  .ds-bottom{padding:12px 16px;border-top:1px solid var(--border);display:flex;flex-direction:column;gap:10px;flex-shrink:0}
+  .ds-stats{display:flex;gap:16px}
+  .add-btn-full{width:100%;padding:11px;background:var(--gold);border:none;border-radius:10px;color:white;font-family:'Bebas Neue',sans-serif;font-size:16px;letter-spacing:1.5px;cursor:pointer;transition:all .15s;display:flex;align-items:center;justify-content:center;gap:6px}
+  .add-btn-full:hover{background:#D4970A}
+  .overlay{align-items:center}
+  .modal{border-radius:var(--r);max-width:480px;margin:auto;width:480px}
+  .brand-grid{grid-template-columns:repeat(4,1fr)}
+}
+.desktop-sidebar{display:none}
+</style>
+</head>
+<body>
+
+<!-- LOADING -->
+<div class="loading-screen" id="loading">
+  <div class="loading-logo">🍺 CervezApp</div>
+  <div class="loading-spinner"></div>
+  <div class="loading-sub">Cargando bares de España…</div>
+  <div class="loading-err" id="loading-err" style="display:none"></div>
+</div>
+
+<div id="map"></div>
+<div class="toast" id="toast"></div>
+
+<div class="stats-chip" id="stats-chip">
+  <div><div class="sv" id="sb">0</div><div class="sl">Bares</div></div>
+  <div><div class="sv" id="sm">0</div><div class="sl">Marcas</div></div>
+</div>
+
+<!-- ═══ DESKTOP SIDEBAR ═══ -->
+<div class="desktop-sidebar" id="ds">
+  <div class="ds-top">
+    <div class="ds-logo">
+      <div class="ds-logo-text">🍺 CervezApp</div>
+      <div class="ds-logo-sub">Mapa colaborativo de España</div>
+    </div>
+  </div>
+  <div class="ds-search">
+    <div class="search-wrap">
+      <span class="search-icon">🔍</span>
+      <input class="search-input" id="sq-ds" placeholder="Buscar bar o ciudad…" autocomplete="off" style="width:100%"/>
+    </div>
+  </div>
+  <div class="ds-filters" id="pills-ds"></div>
+  <div class="ds-list-hdr"><span>Bares</span><span id="ds-cnt">0</span></div>
+  <div class="ds-list" id="ds-list"></div>
+  <div class="ds-bottom">
+    <div class="ds-stats">
+      <div><div class="sv" id="ds-sb">0</div><div class="sl">Bares</div></div>
+      <div><div class="sv" id="ds-sm">0</div><div class="sl">Marcas</div></div>
+      <div><div class="sv" id="ds-sc">0</div><div class="sl">Ciudades</div></div>
+    </div>
+    <button class="add-btn-full" id="add-ds">＋ Añadir bar</button>
+  </div>
+</div>
+
+<!-- ═══ MOBILE TOPBAR ═══ -->
+<div class="topbar">
+  <div class="logo">
+    <div class="logo-icon">🍺</div>
+    <div>
+      <div class="logo-text">CervezApp</div>
+      <div class="logo-sub">Mapa colaborativo</div>
+    </div>
+  </div>
+  <div class="topbar-btns">
+    <button class="icon-btn" id="add-mob">＋ Añadir</button>
+    <button class="icon-btn round" id="loc-mob" title="Mi ubicación">◎</button>
+  </div>
+</div>
+<div class="searchbar">
+  <div class="search-wrap">
+    <span class="search-icon">🔍</span>
+    <input class="search-input" id="sq-mob" placeholder="Buscar bar o ciudad…" autocomplete="off"/>
+  </div>
+</div>
+<div class="filter-row" id="pills-mob"></div>
+
+<!-- ═══ BOTTOM SHEET ═══ -->
+<div class="sheet mid" id="sheet">
+  <div class="sh-handle" id="sh-handle">
+    <div class="sh-bar"></div>
+    <div class="sh-title-row">
+      <span class="sh-title">🍺 Bares</span>
+      <span class="sh-count" id="sh-cnt">cargando…</span>
+    </div>
+  </div>
+  <div class="sh-body" id="sh-body"></div>
+</div>
+
+<!-- ═══ MODAL AÑADIR BAR ═══ -->
+<div class="overlay" id="overlay">
+  <div class="modal">
+    <div class="m-header">
+      <div class="m-title">🍻 Añadir Bar</div>
+      <button class="m-close" id="m-close">✕</button>
+    </div>
+    <div class="fg">
+      <label class="fl">Nombre del bar *</label>
+      <input class="fi" id="fn" placeholder="Ej: Bar El Patio" autocomplete="off"/>
+      <div class="ferr" id="en"></div>
+    </div>
+    <div class="fg">
+      <label class="fl">Cerveza de barril *</label>
+      <div class="brand-grid" id="bsel"></div>
+      <div class="ferr" id="eb"></div>
+    </div>
+    <div class="fg">
+      <label class="fl">Ciudad *</label>
+      <input class="fi" id="fci" placeholder="Ej: Madrid" autocomplete="off"/>
+      <div class="ferr" id="eci"></div>
+    </div>
+    <div class="fg">
+      <label class="fl">Dirección</label>
+      <input class="fi" id="fad" placeholder="Ej: Calle Mayor, 5" autocomplete="off"/>
+    </div>
+    <div class="fg">
+      <label class="fl">Etiquetas (separadas por coma)</label>
+      <input class="fi" id="ftg" placeholder="Ej: tapas, terraza, pintxos"/>
+    </div>
+    <div class="fg">
+      <label class="fl">Ubicación en el mapa *</label>
+      <button class="loc-btn" id="geo-btn">📍 Usar mi ubicación actual</button>
+      <div class="coord-row">
+        <input class="fi" id="flat" placeholder="Latitud" type="number" step="0.0001"/>
+        <input class="fi" id="flng" placeholder="Longitud" type="number" step="0.0001"/>
+      </div>
+      <div class="hint">💡 También puedes tocar el mapa primero para marcar la ubicación exacta</div>
+      <div class="ferr" id="eloc"></div>
+    </div>
+    <button class="submit" id="sub-btn">
+      <span id="sub-txt">PUBLICAR BAR</span>
+    </button>
+  </div>
+</div>
+
+<script>
+// ══════════════════════════════════════════════════════════
+// SUPABASE CONFIG
+// ══════════════════════════════════════════════════════════
+const SB_URL = "https://qdyodioomhtneoksbxui.supabase.co";
+const SB_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFkeW9kaW9vbWh0bmVva3NieHVpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY5NDc1OTcsImV4cCI6MjA5MjUyMzU5N30.jXKaFarNcw6iYOa-briXsAJKrAgTI4VQ9hY2kSgX-Bg";
+const SB_HEADERS = {
+  "Content-Type": "application/json",
+  "apikey": SB_KEY,
+  "Authorization": "Bearer " + SB_KEY
+};
+
+async function dbGetAll() {
+  const r = await fetch(`${SB_URL}/rest/v1/bares?select=*&order=creado_en.asc`, { headers: SB_HEADERS });
+  if (!r.ok) throw new Error("Error al conectar con la base de datos");
+  return r.json();
+}
+
+async function dbInsert(bar) {
+  const r = await fetch(`${SB_URL}/rest/v1/bares`, {
+    method: "POST",
+    headers: { ...SB_HEADERS, "Prefer": "return=representation" },
+    body: JSON.stringify(bar)
+  });
+  if (!r.ok) { const e = await r.text(); throw new Error(e); }
+  const d = await r.json();
+  return d[0];
+}
+
+function fromDB(row) {
+  return {
+    id: row.id,
+    name: row.nombre,
+    city: row.ciudad,
+    address: row.direccion || "",
+    lat: row.lat,
+    lng: row.lng,
+    brand: row.marca,
+    tags: row.etiquetas || [],
+    fromDB: true,
+    at: row.creado_en
+  };
+}
+
+// ══════════════════════════════════════════════════════════
+// SVG LOGOS
+// ══════════════════════════════════════════════════════════
+const LOGOS = {
+  mahou: (w,h)=>`<svg width="${w}" height="${h}" viewBox="0 0 56 36" xmlns="http://www.w3.org/2000/svg"><rect width="56" height="36" rx="5" fill="#C8102E"/><rect x="2" y="2" width="52" height="32" rx="4" fill="#E8192C"/><rect x="0" y="12" width="56" height="12" fill="#FFD700"/><text x="28" y="22" font-family="Arial Black,sans-serif" font-size="9" font-weight="900" fill="#C8102E" text-anchor="middle" dominant-baseline="middle">MAHOU</text><text x="28" y="8" font-family="Arial,sans-serif" font-size="5.5" fill="#FFD700" text-anchor="middle" dominant-baseline="middle" letter-spacing="1">CINCO ESTRELLAS</text><text x="28" y="30" font-family="Arial,sans-serif" font-size="4.5" fill="#FFD700" text-anchor="middle" dominant-baseline="middle">MADRID 1890</text></svg>`,
+  estrella_damm: (w,h)=>`<svg width="${w}" height="${h}" viewBox="0 0 56 36" xmlns="http://www.w3.org/2000/svg"><rect width="56" height="36" rx="5" fill="#CC0000"/><rect x="2" y="2" width="52" height="32" rx="4" fill="#E8192C"/><ellipse cx="28" cy="18" rx="22" ry="13" fill="#FFD700"/><text x="28" y="15" font-family="Arial Black,sans-serif" font-size="6" font-weight="900" fill="#CC0000" text-anchor="middle" dominant-baseline="middle">ESTRELLA</text><text x="28" y="23" font-family="Arial Black,sans-serif" font-size="7" font-weight="900" fill="#CC0000" text-anchor="middle" dominant-baseline="middle">DAMM</text></svg>`,
+  cruzcampo: (w,h)=>`<svg width="${w}" height="${h}" viewBox="0 0 56 36" xmlns="http://www.w3.org/2000/svg"><rect width="56" height="36" rx="5" fill="#007A33"/><rect x="2" y="2" width="52" height="32" rx="4" fill="#008C3A"/><rect x="0" y="13" width="56" height="10" fill="#FFD700"/><text x="28" y="18" font-family="Arial Black,sans-serif" font-size="8" font-weight="900" fill="#007A33" text-anchor="middle" dominant-baseline="middle">CRUZCAMPO</text><text x="28" y="8" font-family="Arial,sans-serif" font-size="4.5" fill="#FFD700" text-anchor="middle" dominant-baseline="middle">CERVEZA DE SEVILLA</text><text x="28" y="30" font-family="Arial,sans-serif" font-size="4" fill="#FFD700" text-anchor="middle" dominant-baseline="middle">DESDE 1904</text></svg>`,
+  estrella_galicia: (w,h)=>`<svg width="${w}" height="${h}" viewBox="0 0 56 36" xmlns="http://www.w3.org/2000/svg"><rect width="56" height="36" rx="5" fill="#003087"/><rect x="2" y="2" width="52" height="32" rx="4" fill="#0040A0"/><rect x="0" y="14" width="56" height="8" fill="#FFD700"/><text x="28" y="18" font-family="Arial Black,sans-serif" font-size="7" font-weight="900" fill="#003087" text-anchor="middle" dominant-baseline="middle">ESTRELLA</text><text x="28" y="8" font-family="Arial,sans-serif" font-size="5" fill="#FFD700" text-anchor="middle" dominant-baseline="middle">★ GALICIA ★</text><text x="28" y="30" font-family="Arial,sans-serif" font-size="4" fill="#FFD700" text-anchor="middle" dominant-baseline="middle">A CORUÑA 1906</text></svg>`,
+  san_miguel: (w,h)=>`<svg width="${w}" height="${h}" viewBox="0 0 56 36" xmlns="http://www.w3.org/2000/svg"><rect width="56" height="36" rx="5" fill="#1A5E20"/><rect x="2" y="2" width="52" height="32" rx="4" fill="#2E7D32"/><text x="28" y="13" font-family="Arial Black,sans-serif" font-size="6.5" font-weight="900" fill="#FFD700" text-anchor="middle" dominant-baseline="middle">SAN MIGUEL</text><rect x="8" y="16.5" width="40" height="1.5" fill="#FFD700"/><text x="28" y="24" font-family="Arial,sans-serif" font-size="5.5" fill="#FFD700" text-anchor="middle" dominant-baseline="middle" letter-spacing="2">ESPECIAL</text></svg>`,
+  voll_damm: (w,h)=>`<svg width="${w}" height="${h}" viewBox="0 0 56 36" xmlns="http://www.w3.org/2000/svg"><rect width="56" height="36" rx="5" fill="#8B2500"/><rect x="2" y="2" width="52" height="32" rx="4" fill="#A83200"/><ellipse cx="28" cy="18" rx="22" ry="13" fill="#D4400A"/><text x="28" y="14" font-family="Arial Black,sans-serif" font-size="7.5" font-weight="900" fill="#FFE066" text-anchor="middle" dominant-baseline="middle">VOLL</text><rect x="10" y="16.5" width="36" height="1" fill="#FFE066"/><text x="28" y="23" font-family="Arial Black,sans-serif" font-size="7.5" font-weight="900" fill="#FFE066" text-anchor="middle" dominant-baseline="middle">DAMM</text><text x="28" y="31" font-family="Arial,sans-serif" font-size="4" fill="#FFB870" text-anchor="middle" dominant-baseline="middle">DOBLE MALTA</text></svg>`,
+  alhambra: (w,h)=>`<svg width="${w}" height="${h}" viewBox="0 0 56 36" xmlns="http://www.w3.org/2000/svg"><rect width="56" height="36" rx="5" fill="#1A0A00"/><rect x="2" y="2" width="52" height="32" rx="4" fill="#2A1200"/><rect x="0" y="11" width="56" height="14" fill="#C8960A"/><text x="28" y="18" font-family="Georgia,serif" font-size="8" font-weight="bold" fill="#1A0A00" text-anchor="middle" dominant-baseline="middle">ALHAMBRA</text><text x="28" y="8" font-family="Georgia,serif" font-size="4.5" fill="#C8960A" text-anchor="middle" dominant-baseline="middle">✦ GRANADA ✦</text><text x="28" y="30" font-family="Georgia,serif" font-size="4" fill="#C8960A" text-anchor="middle" dominant-baseline="middle">RESERVA 1925</text></svg>`,
+  moritz: (w,h)=>`<svg width="${w}" height="${h}" viewBox="0 0 56 36" xmlns="http://www.w3.org/2000/svg"><rect width="56" height="36" rx="5" fill="#CC0000"/><rect x="2" y="2" width="52" height="32" rx="4" fill="#E00000"/><rect x="4" y="4" width="48" height="28" rx="3" fill="white"/><rect x="4" y="4" width="48" height="9" rx="3" fill="#CC0000"/><text x="28" y="10" font-family="Arial Black,sans-serif" font-size="5.5" font-weight="900" fill="white" text-anchor="middle" dominant-baseline="middle" letter-spacing="2">MORITZ</text><text x="28" y="21" font-family="Arial Black,sans-serif" font-size="10" font-weight="900" fill="#CC0000" text-anchor="middle" dominant-baseline="middle">M</text><text x="28" y="31" font-family="Arial,sans-serif" font-size="4" fill="#CC0000" text-anchor="middle" dominant-baseline="middle">BARCELONA 1856</text></svg>`,
+  amstel: (w,h)=>`<svg width="${w}" height="${h}" viewBox="0 0 56 36" xmlns="http://www.w3.org/2000/svg"><rect width="56" height="36" rx="5" fill="#CC0000"/><rect x="2" y="2" width="52" height="32" rx="4" fill="#E00000"/><rect x="4" y="14" width="48" height="8" fill="white"/><text x="28" y="18" font-family="Arial Black,sans-serif" font-size="9" font-weight="900" fill="#CC0000" text-anchor="middle" dominant-baseline="middle" letter-spacing="1">AMSTEL</text><text x="28" y="8.5" font-family="Arial,sans-serif" font-size="4.5" fill="white" text-anchor="middle" dominant-baseline="middle">CERVEZA RUBIA</text></svg>`,
+  heineken: (w,h)=>`<svg width="${w}" height="${h}" viewBox="0 0 56 36" xmlns="http://www.w3.org/2000/svg"><rect width="56" height="36" rx="5" fill="#006E1C"/><rect x="2" y="2" width="52" height="32" rx="4" fill="#007D20"/><ellipse cx="28" cy="18" rx="24" ry="14" fill="#008C24"/><text x="28" y="14.5" font-family="Arial Black,sans-serif" font-size="8.5" font-weight="900" fill="white" text-anchor="middle" dominant-baseline="middle">Heineken</text><rect x="9" y="17" width="38" height="1.2" fill="white" opacity="0.6"/><text x="28" y="24" font-family="Arial,sans-serif" font-size="4.5" fill="white" text-anchor="middle" dominant-baseline="middle" letter-spacing="1">★ PREMIUM ★</text></svg>`,
+  ambar: (w,h)=>`<svg width="${w}" height="${h}" viewBox="0 0 56 36" xmlns="http://www.w3.org/2000/svg"><rect width="56" height="36" rx="5" fill="#B8860B"/><rect x="2" y="2" width="52" height="32" rx="4" fill="#DAA520"/><rect x="0" y="12" width="56" height="12" fill="#1A1A1A"/><text x="28" y="18" font-family="Arial Black,sans-serif" font-size="10" font-weight="900" fill="#DAA520" text-anchor="middle" dominant-baseline="middle" letter-spacing="1">AMBAR</text><text x="28" y="8" font-family="Arial,sans-serif" font-size="4.5" fill="#1A1A1A" text-anchor="middle" dominant-baseline="middle">CERVEZAS</text><text x="28" y="30" font-family="Arial,sans-serif" font-size="4" fill="#1A1A1A" text-anchor="middle" dominant-baseline="middle">ZARAGOZA</text></svg>`,
+  levante: (w,h)=>`<svg width="${w}" height="${h}" viewBox="0 0 56 36" xmlns="http://www.w3.org/2000/svg"><rect width="56" height="36" rx="5" fill="#003087"/><rect x="2" y="2" width="52" height="32" rx="4" fill="#004BB5"/><rect x="0" y="12" width="56" height="12" fill="#FFD700"/><text x="28" y="18" font-family="Arial Black,sans-serif" font-size="7" font-weight="900" fill="#003087" text-anchor="middle" dominant-baseline="middle">LEVANTE</text><text x="28" y="8" font-family="Arial,sans-serif" font-size="4.5" fill="#FFD700" text-anchor="middle" dominant-baseline="middle">ESTRELLA DE</text><text x="28" y="30" font-family="Arial,sans-serif" font-size="4" fill="#FFD700" text-anchor="middle" dominant-baseline="middle">MURCIA</text></svg>`,
+};
+
+// ══════════════════════════════════════════════════════════
+// BRANDS
+// ══════════════════════════════════════════════════════════
+const B = {
+  mahou:            {name:"Mahou",           c:"#C8102E", bg:"#3D0008", o:"Madrid",    logo:LOGOS.mahou},
+  estrella_damm:    {name:"Estrella Damm",   c:"#E8192C", bg:"#3D0008", o:"Barcelona", logo:LOGOS.estrella_damm},
+  cruzcampo:        {name:"Cruzcampo",       c:"#008C3A", bg:"#003D15", o:"Sevilla",   logo:LOGOS.cruzcampo},
+  estrella_galicia: {name:"Estrella Galicia",c:"#0040A0", bg:"#001B40", o:"A Coruña",  logo:LOGOS.estrella_galicia},
+  san_miguel:       {name:"San Miguel",      c:"#2E7D32", bg:"#0D2818", o:"Málaga",    logo:LOGOS.san_miguel},
+  voll_damm:        {name:"Voll-Damm",       c:"#D4400A", bg:"#3D1400", o:"Barcelona", logo:LOGOS.voll_damm},
+  alhambra:         {name:"Alhambra",        c:"#C8960A", bg:"#2A1200", o:"Granada",   logo:LOGOS.alhambra},
+  moritz:           {name:"Moritz",          c:"#CC0000", bg:"#2D0000", o:"Barcelona", logo:LOGOS.moritz},
+  amstel:           {name:"Amstel",          c:"#E00000", bg:"#2D0000", o:"Holanda",   logo:LOGOS.amstel},
+  heineken:         {name:"Heineken",        c:"#007D20", bg:"#001A08", o:"Holanda",   logo:LOGOS.heineken},
+  ambar:            {name:"Ambar",           c:"#DAA520", bg:"#3D2A00", o:"Zaragoza",  logo:LOGOS.ambar},
+  levante:          {name:"Levante",         c:"#004BB5", bg:"#001840", o:"Murcia",    logo:LOGOS.levante},
+};
+
+// ══════════════════════════════════════════════════════════
+// DATOS DE EJEMPLO (se cargan en Supabase la primera vez)
+// ══════════════════════════════════════════════════════════
+const SAMPLE_BARS = [
+  {nombre:"El Tigre",                ciudad:"Madrid",       direccion:"C/ Infantas, 30",        lat:40.4196,lng:-3.6995, marca:"mahou",            etiquetas:["tapas","clásico"]},
+  {nombre:"Bar Cervantes",           ciudad:"Madrid",       direccion:"C/ Cervantes, 12",       lat:40.4145,lng:-3.6932, marca:"mahou",            etiquetas:["literario"]},
+  {nombre:"Taberna Almendro 13",     ciudad:"Madrid",       direccion:"C/ Almendro, 13",        lat:40.4127,lng:-3.7062, marca:"mahou",            etiquetas:["tapas","la latina"]},
+  {nombre:"La Venencia",             ciudad:"Madrid",       direccion:"C/ Echegaray, 7",        lat:40.4155,lng:-3.6992, marca:"estrella_galicia", etiquetas:["histórico","sherry"]},
+  {nombre:"Bar Cock",                ciudad:"Madrid",       direccion:"C/ de la Reina, 16",     lat:40.4213,lng:-3.6971, marca:"estrella_galicia", etiquetas:["premium"]},
+  {nombre:"Taberna La Dolores",      ciudad:"Madrid",       direccion:"Plaza de Jesús, 4",      lat:40.4135,lng:-3.6942, marca:"san_miguel",       etiquetas:["histórico","tapas"]},
+  {nombre:"Bar Casa Camacho",        ciudad:"Madrid",       direccion:"C/ San Andrés, 4",       lat:40.4232,lng:-3.7071, marca:"amstel",           etiquetas:["madrileño","clásico"]},
+  {nombre:"Bar Marsella",            ciudad:"Barcelona",    direccion:"C/ Escudellers, 65",     lat:41.3795,lng:2.1742,  marca:"estrella_damm",    etiquetas:["histórico","absenta"]},
+  {nombre:"El Xampanyet",            ciudad:"Barcelona",    direccion:"C/ Montcada, 22",        lat:41.3840,lng:2.1815,  marca:"estrella_damm",    etiquetas:["cava","born"]},
+  {nombre:"Bar Calders",             ciudad:"Barcelona",    direccion:"C/ Parlament, 25",       lat:41.3777,lng:2.1650,  marca:"estrella_damm",    etiquetas:["sant antoni"]},
+  {nombre:"La Cova Fumada",          ciudad:"Barcelona",    direccion:"C/ Baluard, 56",         lat:41.3737,lng:2.1877,  marca:"voll_damm",        etiquetas:["barceloneta"]},
+  {nombre:"Fábrica Moritz",          ciudad:"Barcelona",    direccion:"Rda. Sant Antoni, 39",   lat:41.3815,lng:2.1618,  marca:"moritz",           etiquetas:["brewery"]},
+  {nombre:"Cervecería Catalana",     ciudad:"Barcelona",    direccion:"C/ Mallorca, 236",       lat:41.3928,lng:2.1558,  marca:"moritz",           etiquetas:["tapas","eixample"]},
+  {nombre:"El Rinconcillo",          ciudad:"Sevilla",      direccion:"C/ Gerona, 40",          lat:37.3961,lng:-5.9937, marca:"cruzcampo",        etiquetas:["más antiguo","tapas"]},
+  {nombre:"Bar Las Teresas",         ciudad:"Sevilla",      direccion:"C/ Santa Teresa, 2",     lat:37.3854,lng:-5.9919, marca:"cruzcampo",        etiquetas:["santa cruz","jamón"]},
+  {nombre:"El Comercio",             ciudad:"Sevilla",      direccion:"C/ Lineros, 9",          lat:37.3870,lng:-5.9934, marca:"san_miguel",       etiquetas:["tapas"]},
+  {nombre:"Bar Pilar",               ciudad:"Valencia",     direccion:"C/ Moro Zeit, 13",       lat:39.4748,lng:-0.3774, marca:"estrella_damm",    etiquetas:["histórico","mejillones"]},
+  {nombre:"La Pepica",               ciudad:"Valencia",     direccion:"Paseo Neptuno, 6",       lat:39.4618,lng:-0.3408, marca:"san_miguel",       etiquetas:["paella","playa"]},
+  {nombre:"Café Iruña",              ciudad:"Bilbao",       direccion:"C/ Berastegui, 4",       lat:43.2622,lng:-2.9275, marca:"estrella_galicia", etiquetas:["art déco","histórico"]},
+  {nombre:"Victor Montes",           ciudad:"Bilbao",       direccion:"Plaza Nueva, 8",         lat:43.2577,lng:-2.9225, marca:"estrella_galicia", etiquetas:["pintxos"]},
+  {nombre:"El Pimpi",                ciudad:"Málaga",       direccion:"C/ Granada, 62",         lat:36.7204,lng:-4.4171, marca:"san_miguel",       etiquetas:["histórico","famoso"]},
+  {nombre:"Antigua Casa de Guardia", ciudad:"Málaga",       direccion:"Alameda Principal, 18",  lat:36.7216,lng:-4.4239, marca:"alhambra",         etiquetas:["bodega","histórico"]},
+  {nombre:"Bodegas Castañeda",       ciudad:"Granada",      direccion:"C/ Almireceros, 1",      lat:37.1769,lng:-3.6005, marca:"alhambra",         etiquetas:["bodega","albaicín"]},
+  {nombre:"Bar Los Diamantes",       ciudad:"Granada",      direccion:"C/ Navas, 26",           lat:37.1755,lng:-3.5992, marca:"alhambra",         etiquetas:["mariscos","tapas"]},
+  {nombre:"Bar La Cepa",             ciudad:"San Sebastián",direccion:"C/ 31 de Agosto, 7",    lat:43.3228,lng:-1.9750, marca:"estrella_galicia", etiquetas:["pintxos"]},
+  {nombre:"Taberna Salinas",         ciudad:"Córdoba",      direccion:"C/ Tundidores, 3",       lat:37.8822,lng:-4.7797, marca:"cruzcampo",        etiquetas:["histórico","patio"]},
+  {nombre:"El Faro de Cádiz",        ciudad:"Cádiz",        direccion:"C/ San Félix, 15",       lat:36.5297,lng:-6.2937, marca:"cruzcampo",        etiquetas:["mariscos"]},
+  {nombre:"Café El Corrillo",        ciudad:"Salamanca",    direccion:"Plaza Mayor, 22",        lat:40.9653,lng:-5.6641, marca:"mahou",            etiquetas:["plaza mayor"]},
+  {nombre:"Taberna A Pedra",         ciudad:"Vigo",         direccion:"Rúa Pescadería, 4",      lat:42.2389,lng:-8.7184, marca:"estrella_galicia", etiquetas:["mariscos","galego"]},
+  {nombre:"La Bodega de Zaragoza",   ciudad:"Zaragoza",     direccion:"C/ Mayor, 12",           lat:41.6548,lng:-0.8793, marca:"ambar",            etiquetas:["clásico","pinchos"]},
+  {nombre:"Bar El Tubo",             ciudad:"Zaragoza",     direccion:"C/ Estébanes, 4",        lat:41.6539,lng:-0.8781, marca:"ambar",            etiquetas:["el tubo","tapas"]},
+  {nombre:"Bar El Arco",             ciudad:"Murcia",       direccion:"Plaza de las Flores, 13",lat:37.9856,lng:-1.1286, marca:"levante",          etiquetas:["tapas","clásico"]},
+  {nombre:"La Pequeña Taberna",      ciudad:"Murcia",       direccion:"C/ San Nicolás, 17",     lat:37.9848,lng:-1.1273, marca:"levante",          etiquetas:["local","tapas"]},
+  {nombre:"The Heineken Bar",        ciudad:"Barcelona",    direccion:"C/ Diagonal, 55",        lat:41.3944,lng:2.1569,  marca:"heineken",         etiquetas:["moderno"]},
+  {nombre:"Bar Green",               ciudad:"Madrid",       direccion:"C/ Fuencarral, 22",      lat:40.4243,lng:-3.6986, marca:"heineken",         etiquetas:["joven","malasaña"]},
+];
+
+// ══════════════════════════════════════════════════════════
+// STATE
+// ══════════════════════════════════════════════════════════
+let dbBars = [];
+let filters = new Set(Object.keys(B));
+let sq = "", selId = null, mkrs = {}, map, pendLL = null, selBrand = null, shState = "mid";
+
+function allBars() { return dbBars; }
+function filtered() {
+  return allBars().filter(b =>
+    filters.has(b.brand) &&
+    (!sq || b.name.toLowerCase().includes(sq.toLowerCase()) || b.city.toLowerCase().includes(sq.toLowerCase()))
+  );
+}
+function $(i) { return document.getElementById(i); }
+let _tt;
+function toast(m, err=false) {
+  const t = $("toast");
+  t.textContent = m;
+  t.className = "toast" + (err ? " err" : "");
+  t.classList.add("show");
+  clearTimeout(_tt);
+  _tt = setTimeout(() => t.classList.remove("show"), 3500);
+}
+
+// ══════════════════════════════════════════════════════════
+// MAP
+// ══════════════════════════════════════════════════════════
+function initMap() {
+  map = L.map('map', { center: [40.4168, -3.7038], zoom: 6, zoomControl: false });
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+    attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> © <a href="https://carto.com/">CARTO</a>',
+    subdomains: 'abcd', maxZoom: 19
+  }).addTo(map);
+  L.control.zoom({ position: 'bottomright' }).addTo(map);
+  map.on('click', e => {
+    pendLL = e.latlng;
+    $('flat').value = e.latlng.lat.toFixed(5);
+    $('flng').value = e.latlng.lng.toFixed(5);
+    toast('📍 Ubicación marcada — pulsa Añadir bar para continuar');
+  });
+}
+
+function mkIcon(bk) {
+  const b = B[bk] || B.mahou;
+  const W = 46, H = 30;
+  const svg = b.logo(W, H);
+  return L.divIcon({
+    html: `<div style="width:${W}px;height:${H}px;border-radius:5px;overflow:hidden;box-shadow:0 3px 10px rgba(0,0,0,.35),0 0 0 1.5px ${b.c}88;cursor:pointer">${svg}</div>`,
+    className: '', iconSize: [W, H], iconAnchor: [W/2, H/2], popupAnchor: [0, -(H/2+6)]
+  });
+}
+
+function puHTML(bar) {
+  const b = B[bar.brand] || B.mahou;
+  const tags = (bar.tags || []).map(t => `<span class="pu-tag">${t}</span>`).join('');
+  const fecha = bar.at ? new Date(bar.at).toLocaleDateString('es-ES', {day:'numeric',month:'short',year:'numeric'}) : '';
+  return `<div class="pu">
+    <div class="pu-brand">
+      <div class="pu-logo-wrap" style="background:${b.bg};border:1px solid ${b.c}40">${b.logo(64,40)}</div>
+      <div><div class="pu-bname" style="color:${b.c}">${b.name}</div><div class="pu-orig">🏭 ${b.o}</div></div>
+    </div>
+    <div class="pu-hr"></div>
+    <div class="pu-name">🍻 ${bar.name}</div>
+    <div class="pu-addr">${bar.address ? bar.address+', ' : ''}${bar.city}</div>
+    ${tags ? `<div class="pu-tags">${tags}</div>` : ''}
+    ${fecha ? `<div class="pu-date">Añadido el ${fecha}</div>` : ''}
+  </div>`;
+}
+
+function renderMkrs() {
+  Object.values(mkrs).forEach(m => map.removeLayer(m));
+  mkrs = {};
+  filtered().forEach(bar => {
+    const m = L.marker([bar.lat, bar.lng], { icon: mkIcon(bar.brand) }).addTo(map);
+    m.bindPopup(puHTML(bar), { maxWidth: 260, minWidth: 240 });
+    m.on('click', () => { selId = bar.id; renderList(); });
+    mkrs[bar.id] = m;
+  });
+  updateStats();
+}
+
+// ══════════════════════════════════════════════════════════
+// LIST
+// ══════════════════════════════════════════════════════════
+function renderList() {
+  const f = filtered();
+  $('sh-cnt').textContent = `${f.length} bares`;
+  $('ds-cnt').textContent = f.length;
+
+  const makeCard = bar => {
+    const b = B[bar.brand] || B.mahou;
+    const d = document.createElement('div');
+    d.className = `bcard${selId === bar.id ? ' sel' : ''}`;
+    d.innerHTML = `
+      <div class="bcard-ico" style="background:${b.bg};border:1px solid ${b.c}50">${b.logo(44,28)}</div>
+      <div class="bcard-info">
+        <div class="bcard-name">${bar.name}</div>
+        <div class="bcard-meta">
+          <span class="bcard-brand" style="background:${b.bg};color:${b.c}">${b.name}</span>
+          <span class="bcard-city">📍 ${bar.city}</span>
+        </div>
+      </div>`;
+    d.addEventListener('click', () => {
+      selId = bar.id;
+      map.setView([bar.lat, bar.lng], 15);
+      if (mkrs[bar.id]) mkrs[bar.id].openPopup();
+      renderList();
+      if (window.innerWidth < 768) setSheet('mid');
+    });
+    return d;
+  };
+
+  [$('sh-body'), $('ds-list')].forEach(c => {
+    if (!c) return;
+    c.innerHTML = '';
+    if (!f.length) { c.innerHTML = `<div class="no-res"><div class="no-res-ic">🍺</div>Sin resultados con estos filtros</div>`; return; }
+    f.forEach(bar => c.appendChild(makeCard(bar)));
+  });
+}
+
+// ══════════════════════════════════════════════════════════
+// PILLS
+// ══════════════════════════════════════════════════════════
+function renderPills() {
+  ['pills-mob', 'pills-ds'].forEach(id => {
+    const el = $(id); if (!el) return;
+    el.innerHTML = '';
+    Object.entries(B).forEach(([k, b]) => {
+      const on = filters.has(k);
+      const p = document.createElement('div');
+      p.className = `pill${on ? ' on' : ''}`;
+      p.style.borderColor = on ? b.c + '90' : '';
+      p.innerHTML = `<div class="pill-logo" style="background:${b.bg};border-radius:3px">${b.logo(22,14)}</div>${b.name}`;
+      p.addEventListener('click', () => {
+        filters.has(k) ? filters.delete(k) : filters.add(k);
+        renderPills(); renderMkrs(); renderList();
+      });
+      el.appendChild(p);
+    });
+  });
+}
+
+// ══════════════════════════════════════════════════════════
+// STATS
+// ══════════════════════════════════════════════════════════
+function updateStats() {
+  const f = filtered();
+  const brands = new Set(f.map(x => x.brand)).size;
+  const cities = new Set(f.map(x => x.city)).size;
+  $('sb').textContent = f.length; $('sm').textContent = brands;
+  $('ds-sb').textContent = f.length; $('ds-sm').textContent = brands; $('ds-sc').textContent = cities;
+}
+
+// ══════════════════════════════════════════════════════════
+// BOTTOM SHEET DRAG
+// ══════════════════════════════════════════════════════════
+function setSheet(s) {
+  shState = s; $('sheet').className = `sheet ${s}`;
+  const chip = $('stats-chip');
+  if (s === 'full') chip.style.bottom = '90vh';
+  else if (s === 'mid') chip.style.bottom = '295px';
+  else chip.style.bottom = '80px';
+}
+(function() {
+  const h = $('sh-handle'); let sy, st;
+  const s = y => { sy = y; st = Date.now(); };
+  const e = y => {
+    const dy = sy - y, dt = Date.now() - st, fast = dt < 200;
+    if (dy > 40 || (fast && dy > 15)) { if (shState === 'peek') setSheet('mid'); else setSheet('full'); }
+    else if (dy < -40 || (fast && dy < -15)) { if (shState === 'full') setSheet('mid'); else setSheet('peek'); }
+  };
+  h.addEventListener('touchstart', ev => s(ev.touches[0].clientY), { passive: true });
+  h.addEventListener('touchend', ev => e(ev.changedTouches[0].clientY), { passive: true });
+  h.addEventListener('mousedown', ev => { s(ev.clientY); const up = ev2 => { e(ev2.clientY); document.removeEventListener('mouseup', up); }; document.addEventListener('mouseup', up); });
+})();
+
+// ══════════════════════════════════════════════════════════
+// MODAL
+// ══════════════════════════════════════════════════════════
+function renderBSel() {
+  const el = $('bsel'); el.innerHTML = '';
+  Object.entries(B).forEach(([k, b]) => {
+    const d = document.createElement('div');
+    d.className = `bopt${selBrand === k ? ' sel' : ''}`;
+    d.innerHTML = `<div class="bopt-label" style="background:${b.bg}">${b.logo(56, 36)}</div><div class="bopt-nm">${b.name}</div>`;
+    d.addEventListener('click', () => { selBrand = k; renderBSel(); $('eb').textContent = ''; });
+    el.appendChild(d);
+  });
+}
+
+function openModal() {
+  $('overlay').classList.add('open');
+  if (pendLL) { $('flat').value = pendLL.lat.toFixed(5); $('flng').value = pendLL.lng.toFixed(5); }
+  setTimeout(() => $('fn').focus(), 300);
+}
+function closeModal() { $('overlay').classList.remove('open'); resetForm(); }
+function resetForm() {
+  ['fn', 'fci', 'fad', 'ftg', 'flat', 'flng'].forEach(id => $(id).value = '');
+  ['en', 'eb', 'eci', 'eloc'].forEach(id => $(id).textContent = '');
+  selBrand = null; renderBSel();
+  const btn = $('sub-btn'); btn.disabled = false; $('sub-txt').textContent = 'PUBLICAR BAR';
+}
+function validate() {
+  let ok = true;
+  if (!$('fn').value.trim()) { $('en').textContent = 'Nombre obligatorio'; ok = false; }
+  if (!selBrand) { $('eb').textContent = 'Selecciona una marca'; ok = false; }
+  if (!$('fci').value.trim()) { $('eci').textContent = 'Ciudad obligatoria'; ok = false; }
+  const la = parseFloat($('flat').value), ln = parseFloat($('flng').value);
+  if (isNaN(la) || isNaN(ln) || la < 27 || la > 44 || ln < -19 || ln > 6) { $('eloc').textContent = 'Ubicación inválida (debe estar en España)'; ok = false; }
+  return ok;
+}
+
+$('sub-btn').addEventListener('click', async () => {
+  if (!validate()) return;
+  const btn = $('sub-btn'); btn.disabled = true; $('sub-txt').textContent = 'Guardando…';
+  try {
+    const payload = {
+      nombre: $('fn').value.trim(),
+      marca: selBrand,
+      ciudad: $('fci').value.trim(),
+      direccion: $('fad').value.trim() || null,
+      etiquetas: $('ftg').value.split(',').map(t => t.trim()).filter(Boolean),
+      lat: parseFloat($('flat').value),
+      lng: parseFloat($('flng').value),
+    };
+    const row = await dbInsert(payload);
+    const bar = fromDB(row);
+    dbBars.push(bar);
+    pendLL = null;
+    closeModal();
+    renderMkrs(); renderList(); renderPills();
+    setTimeout(() => {
+      map.setView([bar.lat, bar.lng], 16);
+      if (mkrs[bar.id]) mkrs[bar.id].openPopup();
+      if (window.innerWidth < 768) setSheet('mid');
+    }, 350);
+    toast(`✅ ${bar.name} publicado para toda la comunidad`);
+  } catch (err) {
+    btn.disabled = false; $('sub-txt').textContent = 'PUBLICAR BAR';
+    toast('❌ Error al guardar. Inténtalo de nuevo.', true);
+    console.error(err);
+  }
+});
+
+$('geo-btn').addEventListener('click', () => {
+  const btn = $('geo-btn'); btn.classList.add('loading'); btn.textContent = '⏳ Obteniendo…';
+  navigator.geolocation.getCurrentPosition(
+    p => { $('flat').value = p.coords.latitude.toFixed(5); $('flng').value = p.coords.longitude.toFixed(5); btn.classList.remove('loading'); btn.innerHTML = '✅ Ubicación obtenida'; $('eloc').textContent = ''; },
+    () => { btn.classList.remove('loading'); btn.innerHTML = '📍 Usar mi ubicación actual'; $('eloc').textContent = 'No se pudo obtener. Introduce las coordenadas o toca el mapa.'; }
+  );
+});
+
+$('loc-mob').addEventListener('click', () => {
+  navigator.geolocation.getCurrentPosition(p => map.setView([p.coords.latitude, p.coords.longitude], 15));
+});
+$('m-close').addEventListener('click', closeModal);
+$('overlay').addEventListener('click', e => { if (e.target === $('overlay')) closeModal(); });
+$('add-mob').addEventListener('click', openModal);
+$('add-ds').addEventListener('click', openModal);
+
+['sq-mob', 'sq-ds'].forEach(id => {
+  const el = $(id); if (!el) return;
+  el.addEventListener('input', e => {
+    sq = e.target.value;
+    ['sq-mob', 'sq-ds'].forEach(s => { const x = $(s); if (x && x !== e.target) x.value = sq; });
+    renderMkrs(); renderList();
+  });
+});
+
+// ══════════════════════════════════════════════════════════
+// BOOT — Carga datos de Supabase
+// ══════════════════════════════════════════════════════════
+async function boot() {
+  initMap();
+  renderBSel();
+  renderPills();
+  setSheet('mid');
+
+  try {
+    const rows = await dbGetAll();
+
+    // Si la tabla está vacía, cargamos los datos de ejemplo
+    if (rows.length === 0) {
+      $('loading').querySelector('.loading-sub').textContent = 'Cargando datos iniciales…';
+      // Insertamos en lotes de 10 para no saturar
+      for (let i = 0; i < SAMPLE_BARS.length; i += 10) {
+        const batch = SAMPLE_BARS.slice(i, i + 10);
+        await Promise.all(batch.map(bar => dbInsert(bar)));
+      }
+      const fresh = await dbGetAll();
+      dbBars = fresh.map(fromDB);
+    } else {
+      dbBars = rows.map(fromDB);
+    }
+
+    renderMkrs();
+    renderList();
+
+    // Ocultar pantalla de carga
+    const ls = $('loading');
+    ls.classList.add('hidden');
+    setTimeout(() => ls.style.display = 'none', 500);
+
+  } catch (err) {
+    console.error(err);
+    const ls = $('loading');
+    ls.querySelector('.loading-spinner').style.display = 'none';
+    ls.querySelector('.loading-sub').style.display = 'none';
+    const errEl = $('loading-err');
+    errEl.style.display = 'block';
+    errEl.innerHTML = `⚠️ No se pudo conectar con la base de datos.<br><br>Comprueba que la tabla <strong>bares</strong> existe en Supabase y que las políticas RLS están activas.<br><br><small>${err.message}</small>`;
+  }
+}
+
+boot();
+</script>
+</body>
+</html>
