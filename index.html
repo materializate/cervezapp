@@ -205,7 +205,7 @@ html,body{height:100%;width:100%;overflow:hidden;font-family:'DM Sans',sans-seri
 
 /* modal de edición */
 .edit-overlay{
-  position:fixed;inset:0;z-index:500;background:rgba(0,0,0,.4);
+  position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,.5);
   backdrop-filter:blur(3px);display:flex;align-items:flex-end;
   opacity:0;pointer-events:none;transition:opacity .25s;
 }
@@ -216,6 +216,7 @@ html,body{height:100%;width:100%;overflow:hidden;font-family:'DM Sans',sans-seri
   padding:20px 18px 36px;
   transform:translateY(100%);transition:transform .3s cubic-bezier(.4,0,.2,1);
   max-height:90vh;overflow-y:auto;
+  position:relative;z-index:1001;
 }
 .edit-overlay.open .edit-modal{transform:translateY(0)}
 @media(min-width:768px){
@@ -252,7 +253,7 @@ html,body{height:100%;width:100%;overflow:hidden;font-family:'DM Sans',sans-seri
 .pu-change-btn:hover{border-color:var(--gold);color:var(--gold)}
 
 /* ── TOAST ── */
-.toast{position:fixed;bottom:90px;left:50%;transform:translateX(-50%) translateY(20px);z-index:600;background:white;border:1.5px solid var(--gold);border-radius:24px;padding:10px 20px;font-size:13px;font-weight:500;color:var(--gold);opacity:0;pointer-events:none;transition:all .3s;white-space:nowrap;box-shadow:0 4px 20px rgba(0,0,0,.12)}
+.toast{position:fixed;bottom:90px;left:50%;transform:translateX(-50%) translateY(20px);z-index:1100;background:white;border:1.5px solid var(--gold);border-radius:24px;padding:10px 20px;font-size:13px;font-weight:500;color:var(--gold);opacity:0;pointer-events:none;transition:all .3s;white-space:nowrap;box-shadow:0 4px 20px rgba(0,0,0,.12)}
 .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 .toast.err{border-color:#e63946;color:#e63946}
 
@@ -1019,19 +1020,22 @@ async function dbUpdateFull(id, data) {
 
 function openEditModal(bar) {
   map.closePopup();
-  $('edit-id').value = bar.id;
-  $('edit-nombre').value = bar.name || '';
-  $('edit-ciudad').value = bar.city || '';
-  $('edit-direccion').value = bar.address || '';
-  $('edit-lat').value = bar.lat || '';
-  $('edit-lng').value = bar.lng || '';
-  $('edit-tags').value = (bar.tags || []).join(', ');
-  $('edit-eloc').textContent = '';
-  $('edit-save-btn').disabled = false;
-  $('edit-save-txt').textContent = 'GUARDAR CAMBIOS';
-  $('edit-geo-btn').classList.remove('loading');
-  $('edit-geo-btn').textContent = '📍 Usar mi ubicación actual';
-  $('edit-overlay').classList.add('open');
+  // Pequeño delay para que Leaflet cierre el popup completamente
+  setTimeout(() => {
+    $('edit-id').value = bar.id;
+    $('edit-nombre').value = bar.name || '';
+    $('edit-ciudad').value = bar.city || '';
+    $('edit-direccion').value = bar.address || '';
+    $('edit-lat').value = bar.lat || '';
+    $('edit-lng').value = bar.lng || '';
+    $('edit-tags').value = (bar.tags || []).join(', ');
+    $('edit-eloc').textContent = '';
+    $('edit-save-btn').disabled = false;
+    $('edit-save-txt').textContent = 'GUARDAR CAMBIOS';
+    $('edit-geo-btn').classList.remove('loading');
+    $('edit-geo-btn').textContent = '📍 Usar mi ubicación actual';
+    $('edit-overlay').classList.add('open');
+  }, 150);
 }
 
 function closeEditModal() {
